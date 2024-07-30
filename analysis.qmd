@@ -1,0 +1,67 @@
+---
+title: "Causal Effect"
+author: "Alex"
+format: html
+execute: 
+  echo: false
+
+---
+
+```{r}
+#| message: FALSE
+library(tidyverse)
+library(primer.data)
+library(tidybayes)
+library(brms)
+library(gtsummary)
+
+```
+
+```{r}
+ch6 <- trains |> select(att_end, treatment)
+
+```
+
+We seek to understand the effect of exposure to immigrants on immigration attitudes. In particular, we are interested in the causal effect of exposure to Spanish speakers on attitudes toward immigrants. In order to answer that question, we utilize the data set from 2012 on train platforms around Boston, Massachusetts. There is some concern that the relationship has changed since our data was collected.We modeled att_end, a summary measure of attitude toward immigration measured on a 3 to 15 integer scale, as a linear function of treatment.  The average causal effect of treatment was about 1.5, with a 95% confidence interval of 0.5 to 2.5. For context, the difference in attitude between Democrats and Republicans is about 1.7. So, the causal effect of 1.5 means that we would expect a treated Democrat to become almost as conservative on immigration as a typical Republican. 
+
+
+```{r}
+#| cache: TRUE
+fit_gauss <- brm(formula = att_end ~ treatment,
+             data = ch6,
+             family = gaussian(),
+             silent = 2,
+             refresh = 0,
+             seed = 9)
+```
+
+
+```{r}
+tbl_regression(fit_gauss)
+```
+
+The posterior, or the coefficient of Control is centered around −1.5 with a 95% Confidence Interval between −2.5 and −0.5.
+
+```{r}
+ndata <- tibble(treatment = c("Treated", "Control")) 
+
+```
+
+
+```{r}
+fit_gauss |> 
+  add_epred_draws(newdata = ndata) |> 
+  select(treatment, .draw, .epred) |> 
+  pivot_wider(id_cols = .draw, names_from = treatment, values_from = .epred )|>
+  mutate(causal_effect = Treated - Control) |> 
+  select(- .draw) |> 
+  ggplot(aes(x = causal_effect))  + 
+    geom_histogram(aes(y = after_stat(count / sum(count))), bins = 100)+
+    scale_y_continuous(labels = scales::percent_format())+
+    theme_classic() +
+    labs(title = "Posterior for Immigration Attitude Post Experiment",
+         subtitle = "Exposure to Spanish-speakers shifts immigration attitudes rightward",
+         x = "Attitude Toward Immigration",
+         y = "Probability")
+```
+
